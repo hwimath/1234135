@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>시그마의 성질</title>
+  <!-- MathJax 라이브러리 로드 -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    defer
+  ></script>
+  <style>
+    /* 흑백 테마 */
+    body {
+      background-color: #fff;
+      color: #000;
+      font-family: sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+    header, footer {
+      text-align: center;
+      padding: 10px;
+    }
+    header {
+      border-bottom: 1px solid #000;
+    }
+    footer {
+      border-top: 1px solid #000;
+      margin-top: 20px;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 10px;
+    }
+
+    /* 메인 영역 */
+    .game-section {
+      margin-top: 20px;
+      padding: 10px;
+      border: 1px solid #000;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    /* 난이도, 이름 입력 */
+    .setup-area {
+      margin-bottom: 20px;
+    }
+
+    /* 에너지바 스타일 */
+    .energy-bar-container {
+      width: 100%;
+      background-color: #000;
+      height: 20px;
+      position: relative;
+      margin: 10px 0;
+    }
+    .energy-bar {
+      background-color: #fff;
+      height: 100%;
+      width: 100%; /* 시작은 가득 차있음. */
+      transition: width linear;
+    }
+
+    /* 문제, 선택지 스타일 */
+    .question-area {
+      margin-bottom: 20px;
+      font-size: 16px;
+      line-height: 1.4;
+    }
+    .choices-area {
+      list-style-type: none;
+      padding-left: 0;
+    }
+    .choices-area li {
+      margin: 5px 0;
+      padding: 8px;
+      border: 1px solid #000;
+      cursor: pointer;
+    }
+    .choices-area li:hover {
+      background-color: #efefef;
+    }
+
+    /* 하단 상태 표시 */
+    .status-area {
+      margin: 10px 0;
+      font-size: 14px;
+    }
+
+    /* 점수 전송 영역 */
+    .report-section {
+      margin-top: 20px;
+      border: 1px solid #000;
+      padding: 10px;
+    }
+    #response {
+      margin-top: 10px;
+      white-space: pre-wrap; /* 줄바꿈 유지 */
+      border: 1px solid #000;
+      padding: 5px;
+    }
+
+  </style>
+</head>
+<body>
+<header>
+  <h1>시그마의 성질</h1>
+</header>
+
+<div class="container">
+  <!-- 난이도, 이름 입력 섹션 -->
+  <div class="setup-area" id="setupArea">
+    <div>
+      <label>이름: <input type="text" id="playerName" placeholder="이름을 입력하세요" /></label>
+    </div>
+    <p>난이도를 선택해주세요.</p>
+    <div>
+      <label><input type="radio" name="difficulty" value="최상" /> 최상 (시작시 20초, 정답 당 20점)</label><br />
+      <label><input type="radio" name="difficulty" value="상" /> 상 (시작시 30초, 정답 당 15점)</label><br />
+      <label><input type="radio" name="difficulty" value="중" /> 중 (시작시 40초, 정답 당 13점)</label><br />
+      <label><input type="radio" name="difficulty" value="하" checked /> 하 (시간제한 없음, 정답 당 10점)</label>
+    </div>
+    <button onclick="startGame()">게임 시작</button>
+  </div>
+
+  <!-- 게임 섹션 -->
+  <div class="game-section hidden" id="gameSection">
+    <div class="status-area">
+      <div>남은 기회: <span id="remainingLives">3</span></div>
+      <div>총 소요 시간: <span id="totalTime">0</span>초</div>
+      <div>현재 점수: <span id="currentScore">0</span></div>
+    </div>
+
+    <!-- 에너지바 (시간제한) -->
+    <div class="energy-bar-container" id="energyBarContainer">
+      <div class="energy-bar" id="energyBar"></div>
+    </div>
+
+    <!-- 문제 표시 영역 -->
+    <div class="question-area" id="questionArea"></div>
+    <ul class="choices-area" id="choicesArea"></ul>
+  </div>
+
+  <!-- 무한 진행 여부 -->
+  <div class="game-section hidden" id="infiniteSection">
+    <p>문제가 모두 끝났습니다! 무한 모드로 계속 진행하시겠습니까?</p>
+    <button onclick="startInfiniteMode()">네, 계속</button>
+    <button onclick="endGame()">아니오, 그만</button>
+  </div>
+
+  <!-- 게임 완료 섹션 -->
+  <div class="game-section hidden" id="gameOverSection">
+    <h2>게임 종료</h2>
+    <p id="finalMessage"></p>
+    <p>최종 점수: <span id="finalScore"></span></p>
+    <p>총 소요 시간: <span id="finalTime"></span>초</p>
+    <button onclick="showReportSection()">점수 전송</button>
+  </div>
+
+  <!-- 점수 전송 섹션 -->
+  <div class="report-section hidden" id="reportSection">
+    <h3>점수 전송</h3>
+    <button onclick="sendScore()">점수전송</button>
+    <div id="response"></div>
+  </div>
+
+</div>
+
+<footer>
+  <p>만든이: 시그마의 성질 퀴즈</p>
+</footer>
+
+<script>
+  /****************************************************************
+   * 모든 문제(10번 ~ 65번)의 데이터를 여기 담습니다.
+   * 문제 번호는 화면에 표시하지 않고, 조건/보기/정답을 모두 포함.
+   * 보기 순서는 매번 shuffle 합니다.
+   * 문제들도 무작위로 섞어서 출제합니다.
+   ****************************************************************/
+  const questionBank = [
+    {
+      // #29
+      question: "\\(\\sum_{k=1}^{10} (8a_k - 5b_k + 2)\\)의 값을 구하시오. (단, \\(\\sum_{k=1}^{10} a_k = 3\\), \\(\\sum_{k=1}^{10} b_k = 2\\))",
+      choices: ["24", "30", "34", "40"],
+      correct: 2, // index 2 => "34"
+      explanation: "정답: 34"
+    },
+    {
+      // #30
+      question: "\\(\\sum_{k=1}^{10} (4a_k + 3b_k - 2)\\)의 값을 구하시오. (단, \\(\\sum_{k=1}^{10} a_k = 3\\), \\(\\sum_{k=1}^{10} b_k = 2\\))",
+      choices: ["-2", "0", "2", "10"],
+      correct: 0, // -2
+      explanation: "정답: -2"
+    },
+    {
+      // #31
+      question: "\\(\\sum_{k=1}^{10} (3a_k - 4b_k)\\)의 값을 구하시오. (단, \\(\\sum_{k=1}^{10} a_k = 3\\), \\(\\sum_{k=1}^{10} b_k = 2\\))",
+      choices: ["-1", "1", "3", "5"],
+      correct: 1, // 1
+      explanation: "정답: 1"
+    },
+    {
+      // #33
+      question: "\\(\\sum_{k=1}^{10} (2a_k - 1)^2\\)의 값을 구하시오. (단, \\(\\sum_{k=1}^{10} a_k = 3\\), \\(\\sum_{k=1}^{10} a_k^2 = 7\\))",
+      choices: ["18", "20", "26", "32"],
+      correct: 2, // 26
+      explanation: "정답: 26"
+    },
+    {
+      // #34
+      question: "\\(\\sum_{k=1}^{10} (a_k - 3)^2\\)의 값을 구하시오. (단, \\(\\sum_{k=1}^{10} a_k = 3\\), \\(\\sum_{k=1}^{10} a_k^2 = 7\\))",
+      choices: ["65", "70", "79", "85"],
+      correct: 2, // 79
+      explanation: "정답: 79"
+    },
+    {
+      // #35
+      question: "\\(\\sum_{k=1}^{10} (3a_k^2 + a_k - 4)\\)의 값을 구하시오. (단, \\(\\sum_{k=1}^{10} a_k = 3\\), \\(\\sum_{k=1}^{10} a_k^2 = 7\\))",
+      choices: ["-16", "-8", "4", "12"],
+      correct: 0, // -16
+      explanation: "정답: -16"
+    },
+    {
+      // #36
+      question: "\\(\\sum_{k=1}^{10} (a_k^2 - 2a_k)\\)의 값을 구하시오. (단, \\(\\sum_{k=1}^{10} a_k = 3\\), \\(\\sum_{k=1}^{10} a_k^2 = 7\\))",
+      choices: ["-5", "1", "7", "10"],
+      correct: 1, // 1
+      explanation: "정답: 1"
+    },
+    {
+      // #37
+      question: "\\(\\sum_{k=1}^{10} (3a_k - 2)^2\\)의 값을 구하시오. (단, \\(\\sum_{k=1}^{10} a_k = 3\\), \\(\\sum_{k=1}^{10} a_k^2 = 6\\))",
+      choices: ["42", "58", "64", "70"],
+      correct: 1, // 58
+      explanation: "정답: 58"
+    },
+    {
+      // #38
+      question: "\\(\\sum_{k=1}^{10} (a_k + 2)^2\\)의 값을 구하시오. (단, \\(\\sum_{k=1}^{10} a_k = 3\\), \\(\\sum_{k=1}^{10} a_k^2 = 6\\))",
+      choices: ["42", "58", "64", "70"],
+      correct: 1, // 58
+      explanation: "정답: 58"
+    },
+    {
+      // #39
+      question: "\\(\\sum_{k=1}^{10} (3a_k^2 - 2a_k + 1)\\)의 값을 구하시오. (단, \\(\\sum_{k=1}^{10} a_k = 3\\), \\(\\sum_{k=1}^{10} a_k^2 = 6\\))",
+      choices: ["10", "22", "25", "30"],
+      correct: 1, // 22
+      explanation: "정답: 22"
+    },
+    {
+      // #40
+      question: "\\(\\sum_{k=1}^{10} (a_k^2 + 3a_k)\\)의 값을 구하시오. (단, \\(\\sum_{k=1}^{10} a_k = 3\\), \\(\\sum_{k=1}^{10} a_k^2 = 6\\))",
+      choices: ["9", "15", "21", "24"],
+      correct: 1, // 15
+      explanation: "정답: 15"
+    },
+    {
+      // #41
+      question: "\\(\\sum_{k=1}^{10} (3a_k - 2)^2\\)의 값을 구하시오. (단, \\(\\sum_{k=1}^{10} a_k = 2\\), \\(\\sum_{k=1}^{10} a_k^2 = 4\\))",
+      choices: ["36", "42", "52", "60"],
+      correct: 2, // 52
+      explanation: "정답: 52"
+    },
+    {
+      // #42
+      question: "\\(\\sum_{k=1}^{10} (a_k - 2)^2\\)의 값을 구하시오. (단, \\(\\sum_{k=1}^{10} a_k = 2\\), \\(\\sum_{k=1}^{10} a_k^2 = 4\\))",
+      choices: ["28", "36", "44", "50"],
+      correct: 1, // 36
+      explanation: "정답: 36"
+    },
+    {
+      // #43
+      question: "\\(\\sum_{k=1}^{10} (a_k + 1)^2\\)의 값을 구하시오. (단, \\(\\sum_{k=1}^{10} a_k = 2\\), \\(\\sum_{k=1}^{10} a_k^2 = 4\\))",
+      choices: ["10", "18", "24", "30"],
+      correct: 1, // 18
+      explanation: "정답: 18"
+    },
+    {
+      // #44
+      question: "\\(\\sum_{k=1}^{10} (a_k - 2b_k + 2)\\)의 값을 구하시오. (단, \\(\\sum_{k=1}^{10} a_k = 100\\), \\(\\sum_{k=1}^{10} b_k = 50\\))",
+      choices: ["10", "15", "20", "25"],
+      correct: 2, // 20
+      explanation: "정답: 20"
+    },
+    {
+      // #45
+      question: "\\(\\sum_{k=1}^{10} (a_k + b_k)\\)의 값을 구하시오. (단, \\(\\sum_{k=1}^{10} a_k = 100\\), \\(\\sum_{k=1}^{10} b_k = 50\\))",
+      choices: ["120", "140", "150", "160"],
+      correct: 2, // 150
+      explanation: "정답: 150"
+    },
+    {
+      // #46
+      question: "\\(\\sum_{k=16}^{20} a_k\\)의 값을 구하시오. (단, \\(\\sum_{k=1}^{20} a_k = 55\\), \\(\\sum_{k=1}^{15} a_k = 40\\))",
+      choices: ["10", "15", "20", "25"],
+      correct: 1, // 15
+      explanation: "정답: 15"
+    },
+    {
+      // #47
+      question: "\\(\\sum_{k=1}^{10} (5a_k + 2)\\)의 값을 구하시오. (단, \\(\\sum_{k=1}^{10} a_k = 2\\))",
+      choices: ["20", "25", "30", "35"],
+      correct: 2, // 30
+      explanation: "정답: 30"
+    },
+    {
+      // #48
+      question: "\\(\\sum_{k=1}^{10} (2a_k + 3b_k)\\)의 값을 구하시오. (단, \\(\\sum_{k=1}^{10} a_k = 2\\), \\(\\sum_{k=1}^{10} b_k = 3\\))",
+      choices: ["10", "13", "16", "19"],
+      correct: 1, // 13
+      explanation: "정답: 13"
+    },
+    {
+      // #51
+      question: "\\(\\sum_{k=1}^{6} (2a_k - 1)^2\\)의 값을 구하시오. (단, \\(\\sum_{k=1}^{6} a_k = 6\\), \\(\\sum_{k=1}^{6} a_k^2 = 30\\))",
+      choices: ["90", "102", "110", "120"],
+      correct: 1, // 102
+      explanation: "정답: 102"
+    },
+    {
+      // #55
+      question: "\\(\\sum_{k=1}^{10} (3a_k - b_k + 2)\\)의 값을 구하시오. (단, \\(\\sum_{k=1}^{10} a_k = 30\\), \\(\\sum_{k=1}^{10} b_k = 40\\))",
+      choices: ["50", "60", "70", "80"],
+      correct: 2, // 70
+      explanation: "정답: 70"
+    },
+    {
+      // #56
+      question: "\\(\\sum_{k=1}^{10} (3a_k - 2b_k + 1)\\)의 값을 구하시오. (단, \\(\\sum_{k=1}^{10} a_k = 20\\), \\(\\sum_{k=1}^{10} b_k = 30\\))",
+      choices: ["5", "10", "15", "20"],
+      correct: 1, // 10
+      explanation: "정답: 10"
+    },
+    {
+      // #60
+      question: "\\(\\sum_{k=1}^{7} (3a_k - 5)^2\\)의 값을 구하시오. (단, \\(\\sum_{k=1}^{7} a_k = 10\\), \\(\\sum_{k=1}^{7} a_k^2 = 50\\))",
+      choices: ["300", "325", "350", "375"],
+      correct: 1, // 325
+      explanation: "정답: 325"
+    },
+    {
+      // #65
+      question: "\\(\\sum_{k=1}^{20} \\bigl[(k^2 + 2) - (k^2 - 2)\\bigr]\\)의 값을 구하시오.",
+      choices: ["60", "70", "80", "90"],
+      correct: 2, // 80
+      explanation: "정답: 80"
+    }
+  ];
+
+  /****************************************************************
+   * 전역 변수들
+   ****************************************************************/
+  let difficulty = "하";   // 기본 난이도
+  let timeLimit = 0;       // 문제 당 제한시간(없으면 0)
+  let scorePerCorrect = 10;  // 정답 당 점수
+  let remainingLives = 3;  // 기회 3번
+  let currentScore = 0;    // 현재 점수
+  let totalElapsedTime = 0; // 총 경과 시간(초)
+  let intervalId = null;   // 전체 시간 카운트용
+  let energyIntervalId = null;  // 문제 당 시간 에너지바용
+  let currentQuestionIndex = 0; // 현재 몇 번째 문제인지(순차)
+  let usedQuestions = [];  // 문제 사용 여부 체크
+  let isInfiniteMode = false; // 모든 문제 후 무한 모드인지 여부
+  let infiniteCount = 0;   // 무한 모드에서 문제를 몇 개나 더 풀었는지
+
+  // 질문 목록을 무작위로 섞는다.
+  shuffleArray(questionBank);
+
+  /****************************************************************
+   * 유틸 함수: 배열 섞기(Fisher-Yates)
+   ****************************************************************/
+  function shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
+  }
+
+  /****************************************************************
+   *  보기를 섞어주는 함수
+   *  'correct' 인덱스가 달라지지 않도록 재계산 필요
+   ****************************************************************/
+  function shuffleChoices(question) {
+    const originalChoices = question.choices.map((c, idx) => ({ text: c, index: idx }));
+    shuffleArray(originalChoices);
+    // 섞인 후의 배열에서, 정답의 위치 찾기
+    let newCorrectIndex = 0;
+    for (let i = 0; i < originalChoices.length; i++) {
+      if (originalChoices[i].index === question.correct) {
+        newCorrectIndex = i;
+        break;
+      }
+    }
+    // 반영
+    question.choices = originalChoices.map(obj => obj.text);
+    question.correct = newCorrectIndex;
+  }
+
+  /****************************************************************
+   * 게임 시작
+   ****************************************************************/
+  function startGame() {
+    const nameField = document.getElementById("playerName");
+    const name = nameField.value.trim();
+    if (!name) {
+      alert("이름을 입력해주세요.");
+      return;
+    }
+
+    // 난이도 설정
+    const diffElems = document.getElementsByName("difficulty");
+    for (let i = 0; i < diffElems.length; i++) {
+      if (diffElems[i].checked) {
+        difficulty = diffElems[i].value;
+        break;
+      }
+    }
+
+    switch (difficulty) {
+      case "최상":
+        timeLimit = 20;
+        scorePerCorrect = 20;
+        break;
+      case "상":
+        timeLimit = 30;
+        scorePerCorrect = 15;
+        break;
+      case "중":
+        timeLimit = 40;
+        scorePerCorrect = 13;
+        break;
+      case "하":
+      default:
+        timeLimit = 0; // 제한 없음
+        scorePerCorrect = 10;
+    }
+
+    // 초기화
+    remainingLives = 3;
+    currentScore = 0;
+    totalElapsedTime = 0;
+    isInfiniteMode = false;
+    infiniteCount = 0;
+
+    // 모든 문제 사용 표시 초기화
+    usedQuestions = new Array(questionBank.length).fill(false);
+    currentQuestionIndex = 0;
+
+    document.getElementById("setupArea").classList.add("hidden");
+    document.getElementById("gameSection").classList.remove("hidden");
+
+    // 전체 시간 측정용 interval
+    intervalId = setInterval(() => {
+      totalElapsedTime++;
+      document.getElementById("totalTime").textContent = totalElapsedTime;
+    }, 1000);
+
+    loadNextQuestion();
+  }
+
+  /****************************************************************
+   * 다음 문제 불러오기
+   ****************************************************************/
+  function loadNextQuestion() {
+    // 에너지바 초기화
+    resetEnergyBar();
+
+    // 모든 문제를 다 풀었는지 체크
+    const allUsed = usedQuestions.every(u => u === true);
+    if (allUsed && !isInfiniteMode) {
+      // 모두 풀었다면
+      document.getElementById("gameSection").classList.add("hidden");
+      document.getElementById("infiniteSection").classList.remove("hidden");
+      return;
+    }
+
+    // 랜덤하게 아직 안 쓴 문제를 찾는다.
+    let idx = -1;
+    while (true) {
+      let r = Math.floor(Math.random() * questionBank.length);
+      if (!usedQuestions[r]) {
+        idx = r;
+        break;
+      }
+      // 무한 모드면 중복 써도 되므로 break
+      if (isInfiniteMode) {
+        idx = r;
+        break;
+      }
+    }
+
+    // 해당 문제 사용 처리(무한 모드는 안 함)
+    if (!isInfiniteMode) {
+      usedQuestions[idx] = true;
+    }
+
+    currentQuestionIndex = idx;
+
+    // 문제 표시
+    displayQuestion(idx);
+  }
+
+  /****************************************************************
+   * 문제 표시 함수
+   ****************************************************************/
+  function displayQuestion(index) {
+    const qData = questionBank[index];
+
+    // 보기를 섞는다.
+    shuffleChoices(qData);
+
+    const questionEl = document.getElementById("questionArea");
+    const choicesEl = document.getElementById("choicesArea");
+
+    questionEl.innerHTML = qData.question; // 수식 포함
+    choicesEl.innerHTML = "";
+
+    // 보기 생성
+    qData.choices.forEach((choiceText, i) => {
+      const li = document.createElement("li");
+      li.textContent = choiceText;
+      li.onclick = () => checkAnswer(i);
+      choicesEl.appendChild(li);
+    });
+
+    // 수식 렌더링(MathJax)
+    MathJax.typeset();
+    // 에너지바 시작
+    startEnergyBar();
+  }
+
+  /****************************************************************
+   * 정답 체크
+   ****************************************************************/
+  function checkAnswer(selectedIndex) {
+    const qData = questionBank[currentQuestionIndex];
+
+    stopEnergyBar(); // 해당 문제 시간 카운트 종료
+
+    if (selectedIndex === qData.correct) {
+      // 정답
+      currentScore += scorePerCorrect;
+      document.getElementById("currentScore").textContent = currentScore;
+      alert("정답입니다!");
+    } else {
+      // 오답
+      remainingLives--;
+      document.getElementById("remainingLives").textContent = remainingLives;
+      alert("틀렸습니다! 정답은: " + qData.choices[qData.correct] 
+            + "\\n(" + qData.explanation + ")");
+      if (remainingLives <= 0) {
+        // 게임 종료
+        gameOver();
+        return;
+      }
+    }
+
+    // 다음 문제로 이동
+    loadNextQuestion();
+  }
+
+  /****************************************************************
+   * 문제 모두 풀었을 때: 무한 모드로 갈지 여부
+   ****************************************************************/
+  function startInfiniteMode() {
+    isInfiniteMode = true;
+    infiniteCount = 0;
+    document.getElementById("infiniteSection").classList.add("hidden");
+    document.getElementById("gameSection").classList.remove("hidden");
+    loadNextQuestion();
+  }
+
+  function endGame() {
+    // 모든 문제 풀이를 종료
+    clearInterval(intervalId);
+    stopEnergyBar();
+
+    document.getElementById("infiniteSection").classList.add("hidden");
+    document.getElementById("gameOverSection").classList.remove("hidden");
+    document.getElementById("finalMessage").textContent = "문제를 모두 푸셨습니다.";
+    document.getElementById("finalScore").textContent = currentScore;
+    document.getElementById("finalTime").textContent = totalElapsedTime;
+  }
+
+  /****************************************************************
+   * 에너지바(문제 제한 시간) 제어
+   ****************************************************************/
+  function startEnergyBar() {
+    if (timeLimit <= 0) {
+      // 하 난이도 등 시간제한이 없다면 표시 X
+      document.getElementById("energyBarContainer").style.display = "none";
+      return;
+    } else {
+      document.getElementById("energyBarContainer").style.display = "block";
+    }
+
+    const bar = document.getElementById("energyBar");
+    bar.style.width = "100%";
+
+    let remain = timeLimit;
+    const step = 100 / timeLimit; // 1초에 줄어드는 폭(%)
+
+    energyIntervalId = setInterval(() => {
+      remain--;
+      const newWidth = Math.max(0, remain * step);
+      bar.style.width = newWidth + "%";
+
+      if (remain <= 0) {
+        // 시간 초과 -> 기회 1 감소
+        stopEnergyBar();
+        remainingLives--;
+        document.getElementById("remainingLives").textContent = remainingLives;
+        if (remainingLives <= 0) {
+          gameOver();
+          return;
+        }
+        // 정답 공개
+        const qData = questionBank[currentQuestionIndex];
+        alert("시간이 초과되었습니다! 정답은: " + qData.choices[qData.correct] 
+              + "\\n(" + qData.explanation + ")");
+        loadNextQuestion();
+      }
+    }, 1000);
+  }
+
+  function stopEnergyBar() {
+    if (energyIntervalId) {
+      clearInterval(energyIntervalId);
+      energyIntervalId = null;
+    }
+  }
+
+  function resetEnergyBar() {
+    stopEnergyBar();
+    const bar = document.getElementById("energyBar");
+    bar.style.width = "100%";
+  }
+
+  /****************************************************************
+   * 게임 종료 처리
+   ****************************************************************/
+  function gameOver() {
+    clearInterval(intervalId);
+    stopEnergyBar();
+
+    document.getElementById("gameSection").classList.add("hidden");
+    document.getElementById("infiniteSection").classList.add("hidden");
+    document.getElementById("gameOverSection").classList.remove("hidden");
+
+    let message = "남은 기회를 모두 소진하였습니다.";
+    document.getElementById("finalMessage").textContent = message;
+    document.getElementById("finalScore").textContent = currentScore;
+    document.getElementById("finalTime").textContent = totalElapsedTime;
+  }
+
+  /****************************************************************
+   * "점수 전송" 영역 표시
+   ****************************************************************/
+  function showReportSection() {
+    document.getElementById("reportSection").classList.remove("hidden");
+  }
+
+  /****************************************************************
+   * 실제 점수 전송
+   ****************************************************************/
+  async function sendScore() {
+    const nameField = document.getElementById("playerName");
+    const name = nameField.value.trim();
+    if (!name) {
+      alert("이름이 없습니다.");
+      return;
+    }
+
+    // 게임 이름, 플레이어 이름, 점수, 총 걸린 시간 전송
+    saveData("시그마의 성질", name, currentScore, totalElapsedTime);
+  }
+
+  /****************************************************************
+   * 데이터 서버 전송 함수
+   ****************************************************************/
+  async function saveData(game, name, score, elapsedTime) {
+    const FUNCTION_URL = "https://us-central1-record-f420d.cloudfunctions.net/report";
+
+    const requestData = {
+      game,
+      name,
+      score: parseInt(score, 10),
+      elapsedTime: parseInt(elapsedTime, 10)
+    };
+
+    try {
+      const response = await fetch(FUNCTION_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestData)
+      });
+
+      const responseData = await response.json();
+
+      if (response.ok) {
+        document.getElementById('response').innerText =
+          `성공: ${JSON.stringify(responseData, null, 2)}`;
+      } else {
+        document.getElementById('response').innerText =
+          `오류: ${JSON.stringify(responseData, null, 2)}`;
+      }
+    } catch (error) {
+      console.error('요청 실패:', error);
+      document.getElementById('response').innerText =
+        `네트워크 오류: ${error.message}`;
+    }
+  }
+</script>
+</body>
+</html>
