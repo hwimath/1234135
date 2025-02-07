@@ -28,29 +28,24 @@
       border-top: 1px solid #000;
       margin-top: 20px;
     }
-
     .container {
       max-width: 800px;
       margin: 0 auto;
       padding: 10px;
     }
-
     /* 메인 영역 */
     .game-section {
       margin-top: 20px;
       padding: 10px;
       border: 1px solid #000;
     }
-
     .hidden {
       display: none;
     }
-
     /* 난이도, 이름 입력 */
     .setup-area {
       margin-bottom: 20px;
     }
-
     /* 에너지바 스타일 */
     .energy-bar-container {
       width: 100%;
@@ -65,7 +60,6 @@
       width: 100%; /* 시작은 가득 차있음. */
       transition: width linear;
     }
-
     /* 문제, 선택지 스타일 */
     .question-area {
       margin-bottom: 20px;
@@ -85,13 +79,11 @@
     .choices-area li:hover {
       background-color: #efefef;
     }
-
     /* 하단 상태 표시 */
     .status-area {
       margin: 10px 0;
       font-size: 14px;
     }
-
     /* 점수 전송 영역 */
     .report-section {
       margin-top: 20px;
@@ -104,7 +96,13 @@
       border: 1px solid #000;
       padding: 5px;
     }
-
+    /* 다음 문제 버튼 */
+    #nextQuestionBtn {
+      margin-top: 10px;
+      padding: 8px 12px;
+      font-size: 16px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -144,6 +142,9 @@
     <!-- 문제 표시 영역 -->
     <div class="question-area" id="questionArea"></div>
     <ul class="choices-area" id="choicesArea"></ul>
+    
+    <!-- 다음 문제 버튼 (답이 확인된 후에만 보임) -->
+    <button id="nextQuestionBtn" class="hidden" onclick="nextQuestion()">다음 문제</button>
   </div>
 
   <!-- 무한 진행 여부 -->
@@ -177,17 +178,15 @@
 
 <script>
   /****************************************************************
-   * 모든 문제(10번 ~ 65번)의 데이터를 여기 담습니다.
-   * 문제 번호는 화면에 표시하지 않고, 조건/보기/정답을 모두 포함.
-   * 보기 순서는 매번 shuffle 합니다.
-   * 문제들도 무작위로 섞어서 출제합니다.
+   * 문제 데이터 (중고등학생이 풀기 적당한 문제들로 구성)
+   * 중복되거나 어색한 문제(원래 38번 문제)는 삭제함.
    ****************************************************************/
   const questionBank = [
     {
       // #29
       question: "\\(\\sum_{k=1}^{10} (8a_k - 5b_k + 2)\\)의 값을 구하시오. (단, \\(\\sum_{k=1}^{10} a_k = 3\\), \\(\\sum_{k=1}^{10} b_k = 2\\))",
       choices: ["24", "30", "34", "40"],
-      correct: 2, // index 2 => "34"
+      correct: 2, // "34"
       explanation: "정답: 34"
     },
     {
@@ -239,13 +238,7 @@
       correct: 1, // 58
       explanation: "정답: 58"
     },
-    {
-      // #38
-      question: "\\(\\sum_{k=1}^{10} (a_k + 2)^2\\)의 값을 구하시오. (단, \\(\\sum_{k=1}^{10} a_k = 3\\), \\(\\sum_{k=1}^{10} a_k^2 = 6\\))",
-      choices: ["42", "58", "64", "70"],
-      correct: 1, // 58
-      explanation: "정답: 58"
-    },
+    // 원래 있던 #38 문제(\\(\\sum (a_k + 2)^2\\))는 조건 및 정답이 중복되어 삭제함.
     {
       // #39
       question: "\\(\\sum_{k=1}^{10} (3a_k^2 - 2a_k + 1)\\)의 값을 구하시오. (단, \\(\\sum_{k=1}^{10} a_k = 3\\), \\(\\sum_{k=1}^{10} a_k^2 = 6\\))",
@@ -364,12 +357,12 @@
   let totalElapsedTime = 0; // 총 경과 시간(초)
   let intervalId = null;   // 전체 시간 카운트용
   let energyIntervalId = null;  // 문제 당 시간 에너지바용
-  let currentQuestionIndex = 0; // 현재 몇 번째 문제인지(순차)
+  let currentQuestionIndex = 0; // 현재 문제 인덱스
   let usedQuestions = [];  // 문제 사용 여부 체크
-  let isInfiniteMode = false; // 모든 문제 후 무한 모드인지 여부
-  let infiniteCount = 0;   // 무한 모드에서 문제를 몇 개나 더 풀었는지
+  let isInfiniteMode = false; // 모든 문제 후 무한 모드 여부
+  let infiniteCount = 0;   // 무한 모드 진행 문제 개수
 
-  // 질문 목록을 무작위로 섞는다.
+  // 문제 목록을 무작위로 섞음.
   shuffleArray(questionBank);
 
   /****************************************************************
@@ -383,13 +376,11 @@
   }
 
   /****************************************************************
-   *  보기를 섞어주는 함수
-   *  'correct' 인덱스가 달라지지 않도록 재계산 필요
+   * 보기를 섞어주는 함수 (정답 인덱스 재조정)
    ****************************************************************/
   function shuffleChoices(question) {
     const originalChoices = question.choices.map((c, idx) => ({ text: c, index: idx }));
     shuffleArray(originalChoices);
-    // 섞인 후의 배열에서, 정답의 위치 찾기
     let newCorrectIndex = 0;
     for (let i = 0; i < originalChoices.length; i++) {
       if (originalChoices[i].index === question.correct) {
@@ -397,7 +388,6 @@
         break;
       }
     }
-    // 반영
     question.choices = originalChoices.map(obj => obj.text);
     question.correct = newCorrectIndex;
   }
@@ -421,7 +411,6 @@
         break;
       }
     }
-
     switch (difficulty) {
       case "최상":
         timeLimit = 20;
@@ -447,15 +436,13 @@
     totalElapsedTime = 0;
     isInfiniteMode = false;
     infiniteCount = 0;
-
-    // 모든 문제 사용 표시 초기화
     usedQuestions = new Array(questionBank.length).fill(false);
     currentQuestionIndex = 0;
 
     document.getElementById("setupArea").classList.add("hidden");
     document.getElementById("gameSection").classList.remove("hidden");
 
-    // 전체 시간 측정용 interval
+    // 전체 시간 측정을 위한 interval
     intervalId = setInterval(() => {
       totalElapsedTime++;
       document.getElementById("totalTime").textContent = totalElapsedTime;
@@ -465,44 +452,34 @@
   }
 
   /****************************************************************
-   * 다음 문제 불러오기
+   * 다음 문제 불러오기 (다음 문제 버튼을 통해 호출)
    ****************************************************************/
   function loadNextQuestion() {
-    // 에너지바 초기화
+    // 다음 문제 버튼 숨김 처리
+    document.getElementById("nextQuestionBtn").classList.add("hidden");
     resetEnergyBar();
 
-    // 모든 문제를 다 풀었는지 체크
+    // 모든 문제를 다 풀었는지 체크 (무한 모드가 아니라면)
     const allUsed = usedQuestions.every(u => u === true);
     if (allUsed && !isInfiniteMode) {
-      // 모두 풀었다면
       document.getElementById("gameSection").classList.add("hidden");
       document.getElementById("infiniteSection").classList.remove("hidden");
       return;
     }
 
-    // 랜덤하게 아직 안 쓴 문제를 찾는다.
+    // 아직 사용하지 않은 문제 중 랜덤 선택 (무한 모드라면 중복 허용)
     let idx = -1;
     while (true) {
       let r = Math.floor(Math.random() * questionBank.length);
-      if (!usedQuestions[r]) {
-        idx = r;
-        break;
-      }
-      // 무한 모드면 중복 써도 되므로 break
-      if (isInfiniteMode) {
+      if (!usedQuestions[r] || isInfiniteMode) {
         idx = r;
         break;
       }
     }
-
-    // 해당 문제 사용 처리(무한 모드는 안 함)
     if (!isInfiniteMode) {
       usedQuestions[idx] = true;
     }
-
     currentQuestionIndex = idx;
-
-    // 문제 표시
     displayQuestion(idx);
   }
 
@@ -511,62 +488,46 @@
    ****************************************************************/
   function displayQuestion(index) {
     const qData = questionBank[index];
-
-    // 보기를 섞는다.
     shuffleChoices(qData);
-
     const questionEl = document.getElementById("questionArea");
     const choicesEl = document.getElementById("choicesArea");
-
-    questionEl.innerHTML = qData.question; // 수식 포함
+    questionEl.innerHTML = qData.question;
     choicesEl.innerHTML = "";
-
-    // 보기 생성
     qData.choices.forEach((choiceText, i) => {
       const li = document.createElement("li");
       li.textContent = choiceText;
       li.onclick = () => checkAnswer(i);
       choicesEl.appendChild(li);
     });
-
-    // 수식 렌더링(MathJax)
     MathJax.typeset();
-    // 에너지바 시작
     startEnergyBar();
   }
 
   /****************************************************************
-   * 정답 체크
+   * 정답 체크 (정답/오답 확인 후 '다음 문제' 버튼 활성화)
    ****************************************************************/
   function checkAnswer(selectedIndex) {
     const qData = questionBank[currentQuestionIndex];
-
-    stopEnergyBar(); // 해당 문제 시간 카운트 종료
-
+    stopEnergyBar();
     if (selectedIndex === qData.correct) {
-      // 정답
       currentScore += scorePerCorrect;
       document.getElementById("currentScore").textContent = currentScore;
       alert("정답입니다!");
     } else {
-      // 오답
       remainingLives--;
       document.getElementById("remainingLives").textContent = remainingLives;
-      alert("틀렸습니다! 정답은: " + qData.choices[qData.correct] 
-            + "\\n(" + qData.explanation + ")");
+      alert("틀렸습니다! 정답은: " + qData.choices[qData.correct] +
+            "\n(" + qData.explanation + ")");
       if (remainingLives <= 0) {
-        // 게임 종료
         gameOver();
         return;
       }
     }
-
-    // 다음 문제로 이동
-    loadNextQuestion();
+    showNextButton();
   }
 
   /****************************************************************
-   * 문제 모두 풀었을 때: 무한 모드로 갈지 여부
+   * 무한 모드 시작 여부
    ****************************************************************/
   function startInfiniteMode() {
     isInfiniteMode = true;
@@ -577,10 +538,8 @@
   }
 
   function endGame() {
-    // 모든 문제 풀이를 종료
     clearInterval(intervalId);
     stopEnergyBar();
-
     document.getElementById("infiniteSection").classList.add("hidden");
     document.getElementById("gameOverSection").classList.remove("hidden");
     document.getElementById("finalMessage").textContent = "문제를 모두 푸셨습니다.";
@@ -589,30 +548,24 @@
   }
 
   /****************************************************************
-   * 에너지바(문제 제한 시간) 제어
+   * 에너지바 제어 (문제 제한 시간)
    ****************************************************************/
   function startEnergyBar() {
     if (timeLimit <= 0) {
-      // 하 난이도 등 시간제한이 없다면 표시 X
       document.getElementById("energyBarContainer").style.display = "none";
       return;
     } else {
       document.getElementById("energyBarContainer").style.display = "block";
     }
-
     const bar = document.getElementById("energyBar");
     bar.style.width = "100%";
-
     let remain = timeLimit;
-    const step = 100 / timeLimit; // 1초에 줄어드는 폭(%)
-
+    const step = 100 / timeLimit;
     energyIntervalId = setInterval(() => {
       remain--;
       const newWidth = Math.max(0, remain * step);
       bar.style.width = newWidth + "%";
-
       if (remain <= 0) {
-        // 시간 초과 -> 기회 1 감소
         stopEnergyBar();
         remainingLives--;
         document.getElementById("remainingLives").textContent = remainingLives;
@@ -620,11 +573,10 @@
           gameOver();
           return;
         }
-        // 정답 공개
         const qData = questionBank[currentQuestionIndex];
-        alert("시간이 초과되었습니다! 정답은: " + qData.choices[qData.correct] 
-              + "\\n(" + qData.explanation + ")");
-        loadNextQuestion();
+        alert("시간이 초과되었습니다! 정답은: " + qData.choices[qData.correct] +
+              "\n(" + qData.explanation + ")");
+        showNextButton();
       }
     }, 1000);
   }
@@ -643,16 +595,29 @@
   }
 
   /****************************************************************
+   * "다음 문제" 버튼 표시
+   ****************************************************************/
+  function showNextButton() {
+    document.getElementById("nextQuestionBtn").classList.remove("hidden");
+  }
+
+  /****************************************************************
+   * 다음 문제 버튼 클릭 시 호출되는 함수
+   ****************************************************************/
+  function nextQuestion() {
+    document.getElementById("nextQuestionBtn").classList.add("hidden");
+    loadNextQuestion();
+  }
+
+  /****************************************************************
    * 게임 종료 처리
    ****************************************************************/
   function gameOver() {
     clearInterval(intervalId);
     stopEnergyBar();
-
     document.getElementById("gameSection").classList.add("hidden");
     document.getElementById("infiniteSection").classList.add("hidden");
     document.getElementById("gameOverSection").classList.remove("hidden");
-
     let message = "남은 기회를 모두 소진하였습니다.";
     document.getElementById("finalMessage").textContent = message;
     document.getElementById("finalScore").textContent = currentScore;
@@ -667,7 +632,7 @@
   }
 
   /****************************************************************
-   * 실제 점수 전송
+   * 점수 전송 함수
    ****************************************************************/
   async function sendScore() {
     const nameField = document.getElementById("playerName");
@@ -676,8 +641,6 @@
       alert("이름이 없습니다.");
       return;
     }
-
-    // 게임 이름, 플레이어 이름, 점수, 총 걸린 시간 전송
     saveData("시그마의 성질", name, currentScore, totalElapsedTime);
   }
 
@@ -686,25 +649,19 @@
    ****************************************************************/
   async function saveData(game, name, score, elapsedTime) {
     const FUNCTION_URL = "https://us-central1-record-f420d.cloudfunctions.net/report";
-
     const requestData = {
       game,
       name,
       score: parseInt(score, 10),
       elapsedTime: parseInt(elapsedTime, 10)
     };
-
     try {
       const response = await fetch(FUNCTION_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestData)
       });
-
       const responseData = await response.json();
-
       if (response.ok) {
         document.getElementById('response').innerText =
           `성공: ${JSON.stringify(responseData, null, 2)}`;
